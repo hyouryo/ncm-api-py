@@ -1,0 +1,23 @@
+[package]
+name = "ncm-api-py"
+version = "0.1.0"
+edition = "2024"
+description = "网易云音乐 API 的 Python 绑定，基于 PyO3 封装 ncm-api-rs"
+license = "MIT"
+repository = "https://github.com/hyouryo/ncm-api-py"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "ncm_api_py"
+crate-type = ["cdylib"]
+
+[features]
+# 作为扩展模块构建时开启（maturin 会自动开启）。
+# `cargo test` 不开启，这样测试可执行文件才会链接 libpython。
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+ncm-api-rs = "0.1.0"
+pyo3 = { version = "0.29.0" }
+pyo3-async-runtimes = { version = "0.29.0", features = ["tokio-runtime"] }
+serde_json = "1"

@@ -1,0 +1,15 @@
+# 仓库内统一存 LF。Windows 上默认 core.autocrlf=true 会把 CRLF 提交进去，
+# 导致 Linux CI 上的 `cargo fmt --check` / ruff 报格式错误，甚至影响 shell 步骤。
+* text=auto eol=lf
+
+# 二进制文件不要做任何换行或 diff 文本转换
+*.pyd binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Cargo.lock 是生成物，折叠 diff 噪音
+Cargo.lock -diff linguist-generated

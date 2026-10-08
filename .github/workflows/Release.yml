@@ -1,0 +1,175 @@
+# 发布流程：在 GitHub 上创建（发布）Release 时构建各平台 wheel 并发布到 PyPI。
+#
+# 使用 PyPI Trusted Publishing（OIDC），不需要在仓库里存任何 token。
+# 首次发布前需要在 PyPI 配置一次 Trusted Publisher：
+#   https://pypi.org/manage/account/publishing/
+#     PyPI Project Name : ncm-api-py
+#     Owner             : hyouryo
+#     Repository name   : ncm-api-py
+#     Workflow name     : Release.yml
+#     Environment name  : pypi
+# 若 ncm-api-py 在 PyPI 上还不存在，请填 "pending publisher"，首次发布后会自动转为正式项目。
+#
+# 触发方式：
+#   1. 发布 Release（release: published）—— 构建并上传 PyPI。
+#   2. 手动 workflow_dispatch —— 默认只构建、不上传（排练）；勾选 publish 才会上传。
+#      想完整验证「上传」这一步，更推荐用「草稿 Release」：草稿不会触发任何运行，
+#      点 Publish 时才走路径 1。
+
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "真的上传到 PyPI（默认关闭，只做构建排练）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------- 各平台构建 wheel ----------
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: "true"
+          manylinux: auto
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  musllinux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: "true"
+          manylinux: musllinux_1_2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.10
+            3.13
+          architecture: ${{ matrix.target }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  # ---------- 发布到 PyPI ----------
+  release:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    # 只有两种情况才进入本 job（即真正发布）：
+    #   1. 发布了 Release（release: published）；
+    #   2. 手动触发时勾选了 publish。
+    # 手动触发不勾 publish = 只跑上面 5 个构建 job 的排练，不会碰 PyPI。
+    if: ${{ github.event_name == 'release' || inputs.publish }}
+    needs: [linux, musllinux, windows, macos, sdist]
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ncm-api-py
+    permissions:
+      # Trusted Publishing 必需：用 OIDC 换取 PyPI 的短期凭据
+      id-token: write
+      # 用于生成构建来源证明（attestation）
+      attestations: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - name: List collected artifacts
+        run: ls -l dist
+      # 能走到这里就说明确实要发布，所以这两步不需要额外条件
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: --non-interactive --skip-existing dist/*

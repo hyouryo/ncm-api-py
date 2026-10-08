@@ -1,0 +1,57 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ncm-api-py"
+description = "网易云音乐 API 的 Python 绑定，基于 PyO3 封装 ncm-api-rs"
+requires-python = ">=3.10"
+license = "MIT"
+readme = "README.md"
+authors = [{ name = "hyouryo" }]
+keywords = ["netease", "music", "api", "ncm", "pyo3"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/hyouryo/ncm-api-py"
+Repository = "https://github.com/hyouryo/ncm-api-py"
+Issues = "https://github.com/hyouryo/ncm-api-py/issues"
+
+[tool.maturin]
+# 显式限定 sdist 的内容：默认会把 dist/ 里的构建产物（wheel、旧 sdist）
+# 一并打包进去，必须在 CI 之前就挡掉。
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "ncm_api_py.pyi",
+]
+
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["target", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "PYI"]
+
+[tool.ruff.lint.per-file-ignores]
+# PYI021 主张 stub 不该带 docstring，但这里刻意保留了接口说明。
+# （另 A002/`type` 参数名、RUF002/中文全角标点同样是刻意选择，只有在放宽
+#   select 时才会提示，此处不改写。）
+"ncm_api_py.pyi" = ["PYI021"]
