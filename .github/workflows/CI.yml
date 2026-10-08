@@ -56,57 +56,15 @@ jobs:
           # auto(=manylinux2014) 的 cross 镜像 GCC 太老，ring 的 ARM 汇编会编译失败
           manylinux: manylinux_2_28
           args: --release --out dist
-      - name: Smoke test the built wheel
+      - name: Check wheel
         run: |
-          set -uo pipefail
-          # 交叉编译的 wheel 装不进宿主平台（架构不符或跨 OS），必须跳过而不是当失败。
-          host="$(uname -m)"
-          sysname="$(uname -s)"
-          # wheel 平台标签的 OS 前缀。不能用 case 的 `$var*` 给多个前缀做择一：
-          # 变量内容里的 `|` 会被当成字面字符，必须逐个前缀循环匹配。
-          case "$sysname" in
-            Linux) osp="manylinux musllinux linux" ;;
-            Darwin) osp="macosx" ;;
-            MINGW*|MSYS*|CYGWIN*) osp="win" ;;
-            *) osp="" ;;
-          esac
-          # 架构在不同平台写法不同：x86_64(Linux) / amd64(Windows) / x86_64|amd64(macOS)；
-          # aarch64(Linux) / arm64(Windows、macOS)。必须用 case 而不是 ${v//a/b}：
-          # CI 的 run 步骤默认 /bin/sh(dash)，不支持该展开。
-          case "$host" in
-            x86_64|amd64) aalias="x86_64 amd64" ;;
-            aarch64|arm64) aalias="aarch64 arm64" ;;
-            i386|i486|i586|i686) aalias="i686" ;;
-            *) aalias="$host" ;;
-          esac
-          echo "host=${host} sysname=${sysname} os_prefix=[${osp}] arch_alias=[${aalias}]"
-          ok=0
-          for whl in dist/*.whl; do
-            platform="${whl##*-}"; platform="${platform%.whl}"
-
-            os_ok=0
-            for p in $osp; do
-              case "$platform" in "$p"*) os_ok=1 ;; esac
-            done
-            if [ "$os_ok" != 1 ]; then
-              echo "==> skip $whl (platform=$platform 不属于本 OS: ${sysname})"
-              continue
-            fi
-
-            arch_ok=0
-            for a in $aalias; do
-              case "$platform" in "$a"|*"_$a"|*"-$a") arch_ok=1 ;; esac
-            done
-            if [ "$arch_ok" = 1 ]; then
-              echo "==> INSTALL $whl (platform=$platform)"
-              python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
-              python -c "import ncm_api_py; print('import OK:', ncm_api_py.__file__)"
-              ok=1
-            else
-              echo "==> skip $whl (platform=$platform, host arch=${host})"
-            fi
-          done
-          [ "$ok" = 1 ] || echo "==> 交叉编译目标，未做运行时验证"
+          ls -l dist
+          ls dist/*abi3*.whl
+          # aarch64 是交叉编译产物，装不进 x86_64 runner，只校验产物名
+          if [ "${{ matrix.target }}" = "x86_64" ]; then
+            python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
+            python -c "import ncm_api_py; print('import OK:', ncm_api_py.__file__)"
+          fi
 
   build-native:
     name: build wheel (${{ matrix.runner }}/${{ matrix.target }})
@@ -129,55 +87,10 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
-      - name: Smoke test the built wheel
+      - name: Check wheel
         shell: bash
         run: |
-          set -uo pipefail
-          # 交叉编译的 wheel 装不进宿主平台（架构不符或跨 OS），必须跳过而不是当失败。
-          host="$(uname -m)"
-          sysname="$(uname -s)"
-          # wheel 平台标签的 OS 前缀。不能用 case 的 `$var*` 给多个前缀做择一：
-          # 变量内容里的 `|` 会被当成字面字符，必须逐个前缀循环匹配。
-          case "$sysname" in
-            Linux) osp="manylinux musllinux linux" ;;
-            Darwin) osp="macosx" ;;
-            MINGW*|MSYS*|CYGWIN*) osp="win" ;;
-            *) osp="" ;;
-          esac
-          # 架构在不同平台写法不同：x86_64(Linux) / amd64(Windows) / x86_64|amd64(macOS)；
-          # aarch64(Linux) / arm64(Windows、macOS)。必须用 case 而不是 ${v//a/b}：
-          # CI 的 run 步骤默认 /bin/sh(dash)，不支持该展开。
-          case "$host" in
-            x86_64|amd64) aalias="x86_64 amd64" ;;
-            aarch64|arm64) aalias="aarch64 arm64" ;;
-            i386|i486|i586|i686) aalias="i686" ;;
-            *) aalias="$host" ;;
-          esac
-          echo "host=${host} sysname=${sysname} os_prefix=[${osp}] arch_alias=[${aalias}]"
-          ok=0
-          for whl in dist/*.whl; do
-            platform="${whl##*-}"; platform="${platform%.whl}"
-
-            os_ok=0
-            for p in $osp; do
-              case "$platform" in "$p"*) os_ok=1 ;; esac
-            done
-            if [ "$os_ok" != 1 ]; then
-              echo "==> skip $whl (platform=$platform 不属于本 OS: ${sysname})"
-              continue
-            fi
-
-            arch_ok=0
-            for a in $aalias; do
-              case "$platform" in "$a"|*"_$a"|*"-$a") arch_ok=1 ;; esac
-            done
-            if [ "$arch_ok" = 1 ]; then
-              echo "==> INSTALL $whl (platform=$platform)"
-              python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
-              python -c "import ncm_api_py; print('import OK:', ncm_api_py.__file__)"
-              ok=1
-            else
-              echo "==> skip $whl (platform=$platform, host arch=${host})"
-            fi
-          done
-          [ "$ok" = 1 ] || echo "==> 交叉编译目标，未做运行时验证"
+          ls -l dist
+          ls dist/*abi3*.whl
+          python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
+          python -c "import ncm_api_py; print('import OK:', ncm_api_py.__file__)"
