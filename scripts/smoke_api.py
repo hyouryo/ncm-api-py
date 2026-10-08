@@ -1,4 +1,4 @@
-"""装好 wheel 之后跑一遍真实调用，确认两个接口在本机真的能用。
+"""装好 wheel 之后跑一遍真实调用，确认三个接口在本机真的能用。
 
 这是唯一必须联网的本地检查：用的是线上接口，所以网络不通会失败 —— 那不是代码问题。
 其余检查（workflow / fmt / clippy / ruff / 构建）全部离线可跑。
@@ -36,6 +36,26 @@ async def main() -> None:
         d: ApiResponse = await client.song_detail(ids)
         assert d.status == 200, f"song_detail({label}) 失败: status={d.status}"
         print(f"song_detail({label:4}) ids={[s['id'] for s in d.body['songs']]}")
+
+    # 播放链接：单 id、显式音质、多 id 三种形态过一遍。
+    # 未登录时 url 基本是 None（版权限制），而**状态码仍是 200**，
+    # 所以断言的是「接口通且返回了 data 结构」，不是「一定有链接」。
+    for label, kwargs in (("默认", {}), ("exhigh", {"level": "exhigh"})):
+        u: ApiResponse = await client.song_url_v1(first, **kwargs)
+        assert u.status == 200, f"song_url_v1({label}) 失败: status={u.status}"
+        data = u.body["data"]
+        assert data, f"song_url_v1({label}) 返回空 data"
+        assert data[0].get("id") == first, f"song_url_v1({label}) 返回的 id 不对"
+        print(f"song_url_v1({label:6}) level={data[0].get('level')} url={'有' if data[0]['url'] else '无'}")
+
+    # 多 id：绑定层拼成 "1,2" 交给 Rust；实测返回条数与顺序都正确，
+    # 但这是服务端对 "[1,2]" 的宽容解析，属未文档化行为。
+    multi = [186016, 186017]
+    m: ApiResponse = await client.song_url_v1(multi, level="standard")
+    assert m.status == 200, f"song_url_v1(多 id) 失败: status={m.status}"
+    got = [x.get("id") for x in m.body["data"]]
+    assert got == multi, f"多 id 返回 {got}，与请求 {multi} 不一致"
+    print(f"song_url_v1(多 id ) 返回 {got}")
 
     # 未登录也应拿到 cookie
     assert r.cookie, "响应里没有 cookie"

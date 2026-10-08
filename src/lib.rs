@@ -1,8 +1,9 @@
 //! ncm-api-py —— `ncm-api-rs` 的 PyO3 绑定
 //!
-//! 目前只翻译两个接口，且都是原样转发：
+//! 目前只翻译三个接口，且都是原样转发：
 //! - `ApiClient::search`       —— 歌曲搜索
 //! - `ApiClient::song_detail`  —— 通过 id 获取歌曲信息
+//! - `ApiClient::song_url_v1`  —— 通过 id 获取歌曲播放链接
 //!
 //! 不增删任何请求参数，也不改动词段名、状态码与错误语义。
 
@@ -154,6 +155,39 @@ impl Client {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let query = ncm_api_rs::Query::new().param("ids", &ids);
             let resp = into_py_result(inner.song_detail(&query).await)?;
+            Python::attach(|py| ApiResponse::from_rs(py, resp))
+        })
+    }
+
+    /// 歌曲播放链接
+    ///
+    /// 对应 `ApiClient::song_url_v1`（即 `/song/url/v1`）。
+    ///
+    /// :param ids: 歌曲 id，支持 `186016` / `"186016"` / `[186016, 186017]`
+    /// :param level: 音质，对应 `Query` 的 `level`，默认 `standard`
+    ///
+    /// 链接在 `body["data"][i]["url"]`；无版权或需付费时该字段为 `None`，
+    /// 但状态码仍是 200，调用方需自行判空。
+    ///
+    /// 注意 `ncm-api-rs` 只取 `Query` 的 `id` 且不做切分，直接拼进
+    /// `format!("[{}]", id)`。传单个 id 时结果是合法 JSON 数组；传多个
+    /// （本层拼成 `"1,2"`）依赖服务端对 `[1,2]` 这种写法的宽容解析，
+    /// 实测可用但属未文档化行为，建议只传单个 id。
+    #[pyo3(signature = (ids, level=None))]
+    fn song_url_v1<'py>(
+        &self,
+        py: Python<'py>,
+        ids: &Bound<'py, PyAny>,
+        level: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let ids = collect_ids(ids)?;
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut query = ncm_api_rs::Query::new().param("id", &ids);
+            if let Some(level) = level {
+                query = query.param("level", &level);
+            }
+            let resp = into_py_result(inner.song_url_v1(&query).await)?;
             Python::attach(|py| ApiResponse::from_rs(py, resp))
         })
     }
