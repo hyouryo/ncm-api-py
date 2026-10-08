@@ -32,6 +32,33 @@ permissions:
   contents: read
 
 jobs:
+  # ---------- 版本号校验：挡住「tag 与 Cargo.toml 不一致」就发布 ----------
+  # 版本号唯一来源是 Cargo.toml 的 version（pyproject.toml 用的是 dynamic version），
+  # maturin 不看 git tag。所以 tag 写错不会有任何报错，只会静默发出错误的版本号，
+  # 而 PyPI 上那个版本号一旦被占用就再也改不了。这里先检查，避免白发一轮。
+  version:
+    name: tag 与版本号一致
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches Cargo.toml version
+        run: |
+          set -euo pipefail
+          have="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' Cargo.toml | head -1)"
+          tag="${{ github.event.release.tag_name }}"
+          if [ -z "$tag" ]; then
+            echo "手动触发（无 tag），当前版本为 $have —— 只做构建排练，跳过校验"
+            exit 0
+          fi
+          want="${tag#v}"          # 允许 tag 带或不带 v 前缀
+          echo "tag=$tag  Cargo.toml=$have"
+          if [ "$want" != "$have" ]; then
+            echo "::error::tag ($tag) 与 Cargo.toml 的 version ($have) 不一致。"
+            echo "::error::请把 Cargo.toml 改成 \"$want\" 后重新提交，再发布 Release。"
+            exit 1
+          fi
+          echo "一致：$have"
+
   # ---------- 各平台构建 wheel ----------
   linux:
     runs-on: ubuntu-latest
@@ -148,7 +175,7 @@ jobs:
     #   2. 手动触发时勾选了 publish。
     # 手动触发不勾 publish = 只跑上面 5 个构建 job 的排练，不会碰 PyPI。
     if: ${{ github.event_name == 'release' || inputs.publish }}
-    needs: [linux, musllinux, windows, macos, sdist]
+    needs: [version, linux, musllinux, windows, macos, sdist]
     environment:
       name: pypi
       url: https://pypi.org/p/ncm-api-py
