@@ -57,6 +57,18 @@ fi
 section "rust（fmt / clippy）"
 if command -v cargo >/dev/null 2>&1; then
   if cargo fmt --all --check; then ok "cargo fmt --all --check"; else bad "cargo fmt --all --check"; fi
+
+  # pyo3 的 build script 需要一个解释器：找不到就报 "no Python 3.x interpreter found"。
+  # 这里显式把已探测到的 PYTHON 交给它，这样调用方不必自己 export PYO3_PYTHON。
+  if [ -n "$PYTHON" ]; then
+    pyo3_py="$("$PYTHON" -c 'import sys; print(sys.executable)' 2>/dev/null)"
+    if [ -n "$pyo3_py" ]; then
+      PYO3_PYTHON="$pyo3_py"
+      export PYO3_PYTHON
+      echo "      PYO3_PYTHON=$PYO3_PYTHON"
+    fi
+  fi
+
   # clippy 需要能构建；离线也能用本地 registry
   if cargo clippy --all-targets --features extension-module -- -D warnings; then
     ok "cargo clippy -D warnings"
