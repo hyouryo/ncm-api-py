@@ -19,6 +19,10 @@ pip install ncm-api-py
 
 需要 Python 3.10 或更高版本。
 
+扩展基于 CPython stable ABI（`abi3`）构建，wheel 只带 `cp310-abi3` 标签，
+**同一个 wheel 在 3.10 到 3.14 上都能装**，不需要按版本单独发行。
+代价是只能用 3.10 就已存在的 CPython C API，并且不支持 free-threaded 版本（3.13t/3.14t）。
+
 ## 用法
 
 两个方法都是 `async`，返回 `ApiResponse`（含 `status` / `body` / `cookie`）：

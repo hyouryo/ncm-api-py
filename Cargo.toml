@@ -15,6 +15,10 @@ crate-type = ["cdylib"]
 # 作为扩展模块构建时开启（maturin 会自动开启）。
 # `cargo test` 不开启，这样测试可执行文件才会链接 libpython。
 extension-module = ["pyo3/extension-module"]
+# CPython stable ABI（PEP 384）：wheel 只打 cp310-abi3 标签，
+# 3.10 及以上通吃，不必按版本各出一个。
+# 由 pyproject.toml 的 [tool.maturin] features 激活，maturin 构建时自动带上。
+abi3 = ["pyo3/abi3-py310"]
 
 [dependencies]
 ncm-api-rs = "0.1.0"

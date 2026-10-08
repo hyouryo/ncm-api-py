@@ -47,7 +47,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist
           sccache: "true"
           manylinux: auto
       - uses: actions/upload-artifact@v4
@@ -69,7 +69,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist
           sccache: "true"
           manylinux: musllinux_1_2
       - uses: actions/upload-artifact@v4
@@ -86,16 +86,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          # 多版本常驻 runner，maturin 的 --find-interpreter 会为每个版本各出一个 wheel
-          python-version: |
-            3.13
-            3.14
+          # abi3 只出一个 wheel，不再需要多版本解释器
+          python-version: "3.14"
           architecture: ${{ matrix.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist
           sccache: "true"
       - uses: actions/upload-artifact@v4
         with:
@@ -116,7 +114,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist
           sccache: "true"
       - uses: actions/upload-artifact@v4
         with:

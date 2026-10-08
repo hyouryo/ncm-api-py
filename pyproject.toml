@@ -33,16 +33,20 @@ Repository = "https://github.com/hyouryo/ncm-api-py"
 Issues = "https://github.com/hyouryo/ncm-api-py/issues"
 
 [tool.maturin]
+# 开启 CPython stable ABI：产物是单个 cp310-abi3 wheel，3.10+ 通用。
+features = ["abi3"]
 # 显式限定 sdist 的内容：默认会把 dist/ 里的构建产物（wheel、旧 sdist）
 # 一并打包进去，必须在 CI 之前就挡掉。
+# 注意 format = "sdist"：不加这个限定的话，这些文件也会被塞进 wheel 根目录
+# （Cargo.toml / src/ 等源码泄漏到 wheel 里）。
 include = [
-    "src/**/*.rs",
-    "Cargo.toml",
-    "Cargo.lock",
-    "pyproject.toml",
-    "README.md",
-    "LICENSE",
-    "ncm_api_py.pyi",
+    { path = "src/**/*.rs", format = "sdist" },
+    { path = "Cargo.toml", format = "sdist" },
+    { path = "Cargo.lock", format = "sdist" },
+    { path = "pyproject.toml", format = "sdist" },
+    { path = "README.md", format = "sdist" },
+    { path = "LICENSE", format = "sdist" },
+    { path = "ncm_api_py.pyi", format = "sdist" },
 ]
 
 [tool.ruff]
