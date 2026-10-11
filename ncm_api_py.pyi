@@ -9,8 +9,7 @@
 三者都是 ``async`` 方法，成功时返回 :class:`ApiResponse`。
 """
 
-from collections.abc import Awaitable, Iterable
-from typing import Any
+from collections.abc import Awaitable
 
 __all__ = ["ApiResponse", "Client", "create_client"]
 
@@ -27,7 +26,7 @@ class ApiResponse:
         """响应状态码，对应 ``ApiResponse::status``."""
 
     @property
-    def body(self) -> dict[str, Any] | list[Any] | str | int | float | bool | None:
+    def body(self) -> dict:
         """响应体，对应 ``ApiResponse::body``（JSON 已映射为 Python 对象）."""
 
     @property
@@ -61,19 +60,17 @@ class Client:
         """
 
     def song_detail(
-        self, ids: int | str | Iterable[int | str],
+        self, ids: list[int],
     ) -> Awaitable[ApiResponse]:
         """通过 id 获取歌曲信息，对应 ``ApiClient::song_detail``（``/song/detail``）.
 
-        :param ids: 歌曲 id，支持 ``186016`` / ``"186016"`` /
-            ``[186016, 186017]`` / ``"186016,186017"``
-
-        字符串会被原样透传，切分与清洗由 ``ncm-api-rs`` 负责
-        （按 ``,`` 切分、去空白、丢掉空串）。
+        :param ids: 歌曲 id
+            必须是 ``int`` 或 ``str``，其余类型（含 ``bytes``/``bytearray``）
+            会抛 ``TypeError``
         """
 
     def song_url_v1(
-        self, ids: int | str | Iterable[int | str], level: str | None = None,
+        self, ids: list[int], level: str | None = None,
     ) -> Awaitable[ApiResponse]:
         """通过 id 获取歌曲播放链接，对应 ``ApiClient::song_url_v1``.
 
@@ -81,14 +78,10 @@ class Client:
         无版权或需要付费时该字段可能是 ``None``，但**状态码仍是 200**，
         调用方必须自己判空。
 
-        :param ids: 歌曲 id，支持 ``186016`` / ``"186016"`` / ``[186016, 186017]``
+        :param ids: 歌曲 id
+            必须是 ``str``，其余类型会抛 ``TypeError``
         :param level: 音质，对应 ``Query`` 的 ``level``，默认 ``standard``
             （另有 ``higher``/``exhigh``/``lossless``/``hires``/``sky`` 等）
-
-        ``ncm-api-rs`` 只取 ``Query`` 的 ``id`` 且不做切分，直接拼进
-        ``format!("[{}]", id)``。单个 id 时是合法 JSON 数组；传多个
-        （本层拼成 ``"1,2"``）依赖服务端对 ``[1,2]`` 的宽容解析，
-        实测可用但属未文档化行为，建议只传单个 id。
         """
 
 

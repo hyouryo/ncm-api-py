@@ -1,0 +1,3 @@
+[env]
+# 之所以加这一句，是因为撞windows命令行上限了，关掉会在windows上无法编译
+CRATE_CC_NO_DEFAULTS = "1"
