@@ -14,7 +14,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -34,7 +33,7 @@ Issues = "https://github.com/hyouryo/ncm-api-py/issues"
 
 [tool.maturin]
 # 开启 CPython stable ABI：产物是单个 cp310-abi3 wheel，3.10+ 通用。
-features = ["abi3"]
+features = ["extension-module", "abi3"]
 # 显式限定 sdist 的内容：默认会把 dist/ 里的构建产物（wheel、旧 sdist）
 # 一并打包进去，必须在 CI 之前就挡掉。
 # 注意 format = "sdist"：不加这个限定的话，这些文件也会被塞进 wheel 根目录
@@ -47,6 +46,8 @@ include = [
     { path = "README.md", format = "sdist" },
     { path = "LICENSE", format = "sdist" },
     { path = "ncm_api_py.pyi", format = "sdist" },
+    { path = ".cargo/config.toml", format = "sdist" },
+    { path = "tests/**/*.py", format = "sdist" },
 ]
 
 [tool.ruff]

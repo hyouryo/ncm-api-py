@@ -1,3 +1,4 @@
-[env]
-# 之所以加这一句，是因为撞windows命令行上限了，关掉会在windows上无法编译
-CRATE_CC_NO_DEFAULTS = "1"
+# 保留 cc 的默认编译 flags：它们包含 PIC、目标架构和 C runtime 等必要设置。
+# CRATE_CC_NO_DEFAULTS 不是 Windows 命令行长度开关，不应在仓库全局启用。
+# CI/Release 的原生构建通过较短的 CARGO_TARGET_DIR 降低路径长度；
+# 若仍遇到命令行长度错误，应根据实际编译器命令诊断，而不是禁用全部默认 flags。

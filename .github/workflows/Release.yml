@@ -31,6 +31,11 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  # 保留原生编译器命令以诊断失败；不禁用 cc 的平台默认 flags。
+  CC_ENABLE_DEBUG_OUTPUT: "1"
+
 jobs:
   # ---------- 版本号校验：挡住「tag 与 Cargo.toml 不一致」就发布 ----------
   # 版本号唯一来源是 Cargo.toml 的 version（pyproject.toml 用的是 dynamic version），
@@ -42,10 +47,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check tag matches Cargo.toml version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           have="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' Cargo.toml | head -1)"
-          tag="${{ github.event.release.tag_name }}"
+          # tag 是外部输入，必须经环境变量传入，不能直接插值为 shell 代码。
+          tag="$RELEASE_TAG"
           if [ -z "$tag" ]; then
             echo "手动触发（无 tag），当前版本为 $have —— 只做构建排练，跳过校验"
             exit 0
@@ -61,10 +69,17 @@ jobs:
 
   # ---------- 各平台构建 wheel ----------
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        target: [x86_64, aarch64]
+        # 保留两个发布架构，改用原生 ARM，避免 native C/ASM 交叉工具链错配。
+        # ubuntu-24.04-arm 需要仓库可使用 GitHub-hosted ARM runner。
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,23 +89,31 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --locked --out dist
           sccache: "true"
-          # 必须是 manylinux_2_28 而不是 auto(=manylinux2014)：那个 cross 镜像基于
-          # CentOS 7 / GCC 4.8，不会预定义 __ARM_ARCH，导致 ring 的 ARM 汇编编译失败。
-          # 2_28 的 GCC 足够新；代价是 glibc 下限从 2.17 提到 2.28
-          # （CentOS 8+ / Debian 10+ / Ubuntu 20.04+）。
+          # 保持现有 glibc 2.28 下限；使用各架构的原生 manylinux 工具链。
           manylinux: manylinux_2_28
+      - name: Install and test wheel
+        run: |
+          ls dist/*abi3*.whl
+          python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
+          python -m unittest discover -s tests -p 'test_*.py'
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
 
   musllinux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        target: [x86_64, aarch64]
+        # musl ARM 也使用原生 runner，保留原有两个发布架构。
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -100,9 +123,19 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --locked --out dist
           sccache: "true"
           manylinux: musllinux_1_2
+      - name: Install and test wheel in musl environment
+        # musl wheel 不能装进 Ubuntu/glibc；使用对应架构 Alpine Python。
+        run: |
+          ls dist/*abi3*.whl
+          docker pull python:3.14-alpine
+          docker run --rm --network none \
+            -v "${PWD}/dist:/dist:ro" \
+            -v "${PWD}/tests:/tests:ro" \
+            python:3.14-alpine sh -c \
+            'python -m pip install --no-index --find-links /dist ncm-api-py && python -m unittest discover -s /tests -p "test_*.py"'
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-musllinux-${{ matrix.target }}
@@ -110,7 +143,11 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    env:
+      # 缩短原生编译器参数中的产物路径，而不是全局禁用 cc flags。
+      CARGO_TARGET_DIR: ${{ runner.temp }}/ncm-target
     strategy:
+      fail-fast: false
       matrix:
         target: [x64, x86]
     steps:
@@ -124,8 +161,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --locked --out dist
           sccache: "true"
+      - name: Install and test wheel
+        shell: bash
+        run: |
+          ls dist/*abi3*.whl
+          python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
+          python -m unittest discover -s tests -p 'test_*.py'
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-windows-${{ matrix.target }}
@@ -133,7 +176,10 @@ jobs:
 
   macos:
     runs-on: macos-latest
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/ncm-target
     strategy:
+      fail-fast: false
       matrix:
         target: [x86_64, aarch64]
     steps:
@@ -145,8 +191,16 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --locked --out dist
           sccache: "true"
+      - name: Check wheel
+        run: |
+          ls dist/*abi3*.whl
+          # macos-latest 是 ARM runner，x86_64 交叉产物只校验文件。
+          if [ "${{ matrix.target }}" = "aarch64" ]; then
+            python -m pip install --force-reinstall --no-index --find-links dist ncm-api-py
+            python -m unittest discover -s tests -p 'test_*.py'
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-${{ matrix.target }}
