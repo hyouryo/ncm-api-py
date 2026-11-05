@@ -32,6 +32,9 @@ Repository = "https://github.com/hyouryo/ncm-api-py"
 Issues = "https://github.com/hyouryo/ncm-api-py/issues"
 
 [tool.maturin]
+# Cargo 包名带连字符，模块名是下划线形式；显式声明后 maturin 与
+# pyo3-stub-gen 才会认成同一个模块（否则会报"多个模块"）。
+module-name = "ncm_api_py"
 # 开启 CPython stable ABI：产物是单个 cp310-abi3 wheel，3.10+ 通用。
 features = ["extension-module", "abi3"]
 # 显式限定 sdist 的内容：默认会把 dist/ 里的构建产物（wheel、旧 sdist）
@@ -46,19 +49,14 @@ include = [
     { path = "README.md", format = "sdist" },
     { path = "LICENSE", format = "sdist" },
     { path = "ncm_api_py.pyi", format = "sdist" },
-    { path = ".cargo/config.toml", format = "sdist" },
-    { path = "tests/**/*.py", format = "sdist" },
+    { path = "checks/**/*.py", format = "sdist" },
 ]
 
 [tool.ruff]
 target-version = "py310"
-extend-exclude = ["target", "dist"]
+# ncm_api_py.pyi 由 pyo3-stub-gen 生成（cargo run --bin stub_gen），
+# 不参与手写代码的风格检查。
+extend-exclude = ["target", "dist", "ncm_api_py.pyi"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "PYI"]
-
-[tool.ruff.lint.per-file-ignores]
-# PYI021 主张 stub 不该带 docstring，但这里刻意保留了接口说明。
-# （另 A002/`type` 参数名、RUF002/中文全角标点同样是刻意选择，只有在放宽
-#   select 时才会提示，此处不改写。）
-"ncm_api_py.pyi" = ["PYI021"]
